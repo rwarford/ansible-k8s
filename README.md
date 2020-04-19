@@ -13,9 +13,10 @@ This script rebuilds the entire Kubernetes PKI every time. ***THIS IS PROBABLY N
 2. Change to the roles/kubernetes-nodes/files/usr/bin directory.
 3. Extract the kubelet and kubectl files.
 
-## Create a cluster
+## Creating a cluster
 1. Create three nodes running Ubuntu 16.04 server.
-   a. Set the hostname for each node.  Name the master testk8m01 and the two works testk8n01 and testk8n02.
+
+   a. Set the host name for each node.  Name the master `testk8m01` and the two workers `testk8n01` and `testk8n02`.
       ```bash
       sudo hostnamectl set-hostname $nodename
       sudo vim /etc/hosts
@@ -49,11 +50,11 @@ This script rebuilds the entire Kubernetes PKI every time. ***THIS IS PROBABLY N
       ssh-copy-id $nodename
       ```
 
-2. Create an ansible hosts file.
+2. Create an ansible inventory file.
 
-   a. Create the hosts file called hosts.test.yaml.
+   a. Create a file called `hosts.test.yaml`.
 
-      The file should look like the following (***this assumes you have Freenas running and have configured a dataset for use by the Freenas provisioner***):
+      The file should look like the following:
 
       ```bash
         all:
@@ -78,10 +79,6 @@ This script rebuilds the entire Kubernetes PKI every time. ***THIS IS PROBABLY N
             cluster_dns:      10.240.0.10
             apiserver_int_ip: 10.240.0.1
             apiserver_ext_ip: "{{ hostvars['testk8m01']['ansible_default_ipv4']['address'] }}"
-            loadbalancer_ip_range: 10.200.10.200-10.200.10.254
-            freenas_provisioner_dataset: Mirror/kubernetes/testk8s
-            freenas_host: <base64 encoded hostname>
-            freenas_password: <base64 encoded password>
             ansible_python_interpreter: /usr/bin/python3
       ```
 
@@ -90,7 +87,7 @@ This script rebuilds the entire Kubernetes PKI every time. ***THIS IS PROBABLY N
       ansible all -m ping -i hosts.test.yaml 
       ```
 
-3. Run the ansible playbook.
+3. Run the Ansible playbook.
       ```bash
       ansible-playbook playbook.yml -i hosts.test.yaml
       ```
