@@ -1,0 +1,17 @@
+apiVersion: v1
+clusters:
+- cluster:
+    server: https://{{ master_ip }}:6443
+  name: test-k8s
+contexts:
+- context:
+    cluster: test-k8s
+    user: system:kube-scheduler
+  name: system:kube-scheduler@test-k8s
+current-context: system:kube-scheduler@test-k8s
+kind: Config
+preferences: {}
+users:
+- name: system:kube-scheduler
+  user:
+    username: system:kube-scheduler

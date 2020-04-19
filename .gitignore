@@ -1,0 +1,6 @@
+*.retry
+hosts*
+kube-ca/*/*
+kube-ca/make.env
+!kube-ca/conf/*
+roles/kubernetes-master/files/etc/kubernetes/pki/*

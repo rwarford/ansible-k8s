@@ -1,0 +1,126 @@
+# To add a new kubernetes node 
+#   edit the hosts file and add the host to kubernetes-nodes then run
+#   ansible-playbook playbook.yml --skip-tags 'master' --limit 'master,$HOSTNAME'
+#
+# To add a basic (non-kubernetes) server:
+#  edit the hosts file and add the host to the hosts: list
+#  make sure ansible user can run sudo without a password
+#  Run the following command:
+#  ansible-playbook playbook.yml --tags 'basic' --limit '$HOSTNAME'
+#
+# Specify an inventory file with the "-i <path>" option:
+#  ansible-playbook playbook.yml -i hosts.dev.yaml
+#
+# Check to see what changes will occur using the "--check" option:
+#  ansible-playbook playbook.yml --check
+#
+---
+# Print Kubernetes variables
+- hosts: all
+  tasks:
+  - name: Print Kubernetes parameters
+    vars:
+      msg: |
+        "                master_name: {{ master_name }}"
+        "               cluster_name: {{ cluster_name }}"
+        "           apiserver_ext_ip: {{ apiserver_ext_ip }}"
+        "           apiserver_int_ip: {{ apiserver_int_ip }}"
+        "                cluster_dns: {{ cluster_dns }}"
+        "                   pod_cidr: {{ pod_cidr }}"
+        "               service_cidr: {{ service_cidr }}"
+
+    debug:
+      msg: "{{ msg.split('\n') }}"
+    run_once: true
+  tags: debug_info
+
+# Basic configuration for all hosts
+- hosts: all
+  roles:
+  - basic
+  tags: basic
+
+# Build Kubernetes PKI
+- hosts: localhost
+  tasks:
+    - name: Build PKI for Kubernetes
+      shell: 'cd {{ playbook_dir }}/kube-ca/; cluster_name="{{ cluster_name }}" make clean; cluster_name="{{ cluster_name }}" master_name="{{ master_name }}" apiserver_ext_ip="{{ apiserver_ext_ip }}" apiserver_int_ip="{{ apiserver_int_ip }}" make'
+      register: make_pki
+    - debug: var=make_pki.stdout_lines
+  tags: master
+
+# Prepare PKI for Kubernetes
+- hosts: localhost
+  tasks:
+    - name: Preparing PKI for Kubernetes
+      shell: 'cluster_name="{{ cluster_name }}" master_name="{{ master_name }}" apiserver_ext_ip="{{ apiserver_ext_ip }}" apiserver_int_ip="{{ apiserver_int_ip }}" {{ playbook_dir }}/make_pki.sh'
+      register: make_pki
+    - debug: var=make_pki.stdout_lines
+  tags: [master, nodes]
+
+# kubernetes master
+- hosts: kubernetes-master
+  become: true
+  roles:
+  - kubernetes-master
+  - kubernetes-nodes
+  post_tasks:
+  - name: Start kubelet
+    systemd:
+      name:           kubelet.service
+      daemon_reload:  yes
+      state:          started
+      enabled:        yes
+  - name: Initialize master (this may take several minutes)
+    shell: /root/init/init-master.sh
+    args:
+      chdir: /root/init/
+    register: init-master
+  - debug: var=init-master.stdout_lines
+  tags: master
+
+# Generate bootstrap token for kubernetes nodes
+- hosts: kubernetes-master
+  become: true
+  pre_tasks:
+  - name: Generate new bootstrap token
+    shell: ./make-bootstrap-secret.sh
+    args:
+        chdir: /root/init
+    register: bootstrap_token
+    run_once: true
+    tags: nodes
+
+# kubernetes nodes
+- hosts: kubernetes-nodes
+  become: true
+  roles:
+  - kubernetes-nodes
+  post_tasks:
+  - name: Copy bootstrap-kubelet.conf
+    template:
+      src:    ../templates/etc/kubernetes/bootstrap-kubelet.conf.j2
+      dest:   /etc/kubernetes/bootstrap-kubelet.conf
+      owner:  root
+      group:  root
+      mode:   u=rw,g=r
+  - name: Start kubelet
+    systemd:
+      name:           kubelet.service
+      daemon_reload:  yes
+      state:          restarted
+      enabled:        yes
+  tags: nodes
+
+- hosts: kubectl-admin
+  tasks:
+  - name: 'Ensure /home/{{ ansible_user_id }}/.kube directory exists'
+    file: path=/home/{{ ansible_user_id }}/.kube state=directory
+  - name: Copy KUBECONFIG file
+    template:
+      src:   '{{ playbook_dir }}/roles/kubernetes-master/templates/etc/kubernetes/admin.conf.j2'
+      dest:  '/home/{{ ansible_user_id }}/.kube/config.{{ cluster_name }}'
+      owner: '{{ ansible_user_id }}'
+      group: '{{ ansible_user_id }}'
+      mode:  u+rw
+  tags: clients

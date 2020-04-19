@@ -1,0 +1,59 @@
+#!/bin/bash
+
+export KUBECONFIG=/etc/kubernetes/admin.conf
+
+# Wait for master to initialize
+
+printf 'Waiting for master to become ready...'
+READY_FLAGS=""
+while true 
+do
+    READY_FLAGS=$(kubectl get pods etcd-{{ master_name }} kube-apiserver-{{ master_name }} kube-controller-manager-{{ master_name }} kube-scheduler-{{ master_name }} \
+        --namespace kube-system --ignore-not-found \
+        --output "jsonpath={range .items[*]}{.status.conditions[?(@.type=='Ready')].status}{' '}{end}{'\n'}")
+    if [ "$READY_FLAGS" = "True True True True " ]
+    then
+        break
+    fi
+    printf '.'
+    sleep 3
+done
+printf '\n'
+
+printf 'Adding label to master...\n'
+kubectl label node {{ master_name }} node-role.kubernetes.io/master=""
+
+printf 'Adding dockershim annotation to master...\n'
+kubectl annotate node {{ master_name }} kubeadm.alpha.kubernetes.io/cri-socket=/var/run/dockershim.sock
+
+printf 'Installing coreDNS...\n'
+kubectl apply -f coredns.yaml
+
+printf 'Installing kube-proxy...\n'
+kubectl apply -f kube-proxy-rbac.yaml
+kubectl apply -f kube-proxy-cm.yaml
+kubectl apply -f kube-proxy-ds.yaml
+
+printf 'Waiting for kube-proxy to become ready...'
+READY_FLAGS=""
+while true 
+do
+    READY_FLAGS=$(kubectl get pods --selector k8s-app=kube-proxy --namespace kube-system --no-headers \
+        --output "jsonpath={range .items[*]}{.status.conditions[?(@.type=='Ready')].status}{' '}{end}{'\n'}")
+    if [ "$READY_FLAGS" = "True " ]
+    then
+        break
+    fi
+    printf '.'
+    sleep 3
+done
+printf '\n'
+
+printf 'Installing calico...\n'
+kubectl apply -f calico.yaml
+
+printf 'Enabling node bootstrapping...\n'
+kubectl apply -f bootstrappers.crb.yaml
+kubectl apply -f bootstrap.secret.yaml
+
+printf 'Done.\n'

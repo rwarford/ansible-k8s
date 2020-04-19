@@ -1,0 +1,2 @@
+- name: update trusted ca
+  shell: /usr/sbin/update-ca-certificates

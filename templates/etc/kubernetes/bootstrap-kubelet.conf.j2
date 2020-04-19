@@ -1,0 +1,17 @@
+apiVersion: v1
+clusters:
+- cluster:
+    server: https://{{ master_ip }}:6443
+  name: test-k8s
+contexts:
+- context:
+    cluster: test-k8s
+    user: kubelet-bootstrap
+  name: kubelet-bootstrap@test-k8s
+current-context: kubelet-bootstrap@test-k8s
+kind: Config
+preferences: {}
+users:
+- name: kubelet-bootstrap
+  user:
+    token: {{ hostvars[groups["kubernetes-master"][0]]["bootstrap_token"].stdout }}

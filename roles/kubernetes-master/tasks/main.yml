@@ -1,0 +1,62 @@
+# create kubernetes config directories
+- file:
+    path: "{{ item }}"
+    state: directory
+    mode: u=rw,g=r
+  with_items:
+  - /etc/kubernetes/manifests
+  - /etc/kubernetes/pki
+
+- name: Copy manifests
+  template:
+    src:  "{{ item }}"
+    dest: /etc/kubernetes/manifests/{{ item | basename | regex_replace('\.j2','') }}
+    owner: root
+    group: root
+    mode:  u+r,g+r
+  with_fileglob:
+  - ../templates/etc/kubernetes/manifests/*.j2
+
+- name: Copy kubernetes PKI
+  copy:
+    src:    '{{ playbook_dir }}/kube-ca/{{ cluster_name}}/pki/'
+    dest:   /etc/kubernetes/pki/
+    owner:  root
+    group:  root
+    mode:   u=rw,g=r
+
+- name: Copy kubeconfig files
+  template:
+    src:   "{{ item }}"
+    dest:  /etc/kubernetes/{{ item | basename | regex_replace('\.j2','') }}
+    owner: root
+    group: root
+    mode:  u+rw
+  with_fileglob:
+  - ../templates/etc/kubernetes/*.j2
+
+- name: Copy executables
+  copy:
+    src:    ../files/usr/bin/
+    dest:   /usr/bin/
+    owner:  root
+    group:  root
+    mode:   preserve
+
+- name: Copy initialization script
+  copy:
+    src:    ../files/root/
+    dest:   /root/
+    owner:  root
+    group:  root
+    mode:   preserve
+
+- name: Copy initialization templates
+  template:
+    src:   "{{ item.src }}"
+    dest:  /root/{{ item.path | regex_replace('\.j2','') }}
+    owner: root
+    group: root
+    mode:  preserve
+  with_filetree: ../templates/root
+  when: item.state == 'file'

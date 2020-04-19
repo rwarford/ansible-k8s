@@ -1,0 +1,26 @@
+- name: "Installing additional software"
+  become: true
+  apt: 
+    pkg: ['vim']
+    state: present
+
+- name: 'Adding /etc/profile'
+  become: true
+  copy: src=../files/profile dest=/etc/profile owner=root group=root mode=0644
+
+- name: 'adding /etc/bash.bashrc'
+  become: true
+  copy: src=../files/bash.bashrc dest=/etc/bash.bashrc owner=root group=root mode=0644
+
+- name: 'adding /root/.bashrc'
+  become: true
+  copy: src=../files/root.bash.bashrc dest=/root/.bashrc owner=root group=root mode=0644
+
+- name: 'Removing user bashrc'
+  shell: creates=~/.bashrc_backup mv ~/.bashrc ~/.bashrc_backup
+
+- name: 'Adding /etc/vim/vimrc'
+  become: true
+  copy: src=../files/vimrc dest=/etc/vim/vimrc owner=root group=root mode=0644
+
+
